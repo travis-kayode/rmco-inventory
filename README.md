@@ -18,7 +18,7 @@ Requirements
 - View previous sales
 - View monthly revenue, costs and profit
 
-##Tech Stack
+Tech Stack
 ---
 React Native
 Expo
