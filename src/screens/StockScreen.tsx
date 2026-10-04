@@ -3,6 +3,7 @@ import { StyleSheet, Text, TextInput, View } from 'react-native';
 
 import ProductRow from '../components/ProductRow';
 import { products } from '../data/sampleProducts';
+import { inventoryItems } from '../data/sampleInventory';
 
 export default function StockScreen() {
   const [search, setSearch] = useState('');
@@ -29,14 +30,37 @@ export default function StockScreen() {
         onChangeText={setSearch}
       />
 
-      {filteredProducts.map((product) => (
-        <ProductRow
-          key={product.id}
-          name={product.name}
-          brand={product.brand}
-          colourway={product.colourway}
-        />
-      ))}
+      {filteredProducts.map((product) => {
+        const productInventory = inventoryItems.filter(
+          (item) => item.product_id === product.id
+        );
+
+        const sizes = productInventory.map((item) => item.size);
+        const counts: Record<string, number> = {};
+        for (const size of sizes) {
+            if (size in counts) {
+                counts[size] += 1;
+            } 
+            else {
+                counts[size] = 1;
+            }
+        };
+
+        const sizeDisplay = Object.entries(counts)
+            .map(([size, count]) => `${size} ×${count}`)
+            .join(' · ');
+    
+        return (
+          <ProductRow
+            key={product.id}
+            name={product.name}
+            brand={product.brand}
+            colourway={product.colourway}
+            stockCount={productInventory.length}
+            sizes={sizeDisplay}
+          />
+        );
+    })}
     </View>
   );
 }

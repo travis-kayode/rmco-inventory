@@ -1,4 +1,6 @@
-export const products = [
+import { Product } from '../types/inventory';
+
+export const products: Product[] = [
   {
     id: 1,
     brand: 'Nike',
