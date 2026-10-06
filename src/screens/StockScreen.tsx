@@ -1,11 +1,26 @@
 import { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+    Pressable,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
+} from 'react-native';
 
 import ProductRow from '../components/ProductRow';
 import { products } from '../data/sampleProducts';
 import { inventoryItems } from '../data/sampleInventory';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../types/navigation';
 
-export default function StockScreen({ navigation }: any) {
+type StockScreenProps = NativeStackScreenProps<
+    RootStackParamList,
+    'Stock'
+>;
+
+export default function StockScreen({
+    navigation,
+}: StockScreenProps) {
     const [search, setSearch] = useState('');
 
     const filteredProducts = products.filter((product) => {
@@ -21,7 +36,15 @@ export default function StockScreen({ navigation }: any) {
     return (
         <View style={styles.container}>
             <Text style={styles.title}>Arrange</Text>
-            <Text style={styles.heading}>Stock</Text>
+            <View style={styles.header}>
+                <Text style={styles.heading}>Stock</Text>
+
+                <Pressable
+                    onPress={() => navigation.navigate('AddProduct')}
+                >
+                    <Text style={styles.addButton}>+</Text>
+                </Pressable>
+            </View>
 
             <TextInput
                 style={styles.searchInput}
@@ -86,7 +109,6 @@ const styles = StyleSheet.create({
     heading: {
         fontSize: 24,
         fontWeight: '600',
-        marginTop: 30,
     },
 
     searchInput: {
@@ -97,5 +119,17 @@ const styles = StyleSheet.create({
         paddingHorizontal: 15,
         marginTop: 20,
         fontSize: 16,
+    },
+
+    header: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 30,
+    },
+
+    addButton: {
+        fontSize: 32,
+        fontWeight: '400',
     },
 });

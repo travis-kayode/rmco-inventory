@@ -2,8 +2,17 @@ import { StyleSheet, Text, View } from 'react-native';
 import { products } from '../data/sampleProducts';
 import { inventoryItems } from '../data/sampleInventory';
 import InventoryItemRow from '../components/InventoryItemRow';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../types/navigation';
 
-export default function ProductDetailsScreen({ route }: any) {
+type ProductDetailsScreenProps = NativeStackScreenProps<
+  RootStackParamList,
+  'ProductDetails'
+>;
+
+export default function ProductDetailsScreen({
+  route,
+}: ProductDetailsScreenProps) {
   const { productId } = route.params;
 
   const product = products.find(
