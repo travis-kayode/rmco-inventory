@@ -1,20 +1,54 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Alert } from 'react-native';
+import { supabase } from '../lib/supabase';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../types/navigation';
 
-export default function AddProductScreen() {
+type AddProductScreenProps = NativeStackScreenProps<
+    RootStackParamList,
+    'AddProduct'
+>;
+
+export default function AddProductScreen({
+    navigation,
+}: AddProductScreenProps) {
 
     const [brand, setBrand] = useState('');
     const [name, setName] = useState('');
     const [colourway, setColourway] = useState('');
 
-    const handleCreateProduct = () => {
-        if (!brand.trim()|| !name.trim() || !colourway.trim()) {
-            Alert.alert('Missing fields', 'Please fill in all the fields');
-        }else {
-            console.log('Product can be created')
+    const handleCreateProduct = async () => {
+        if (!brand.trim() || !name.trim() || !colourway.trim()) {
+            Alert.alert('Missing fields', 'Please fill in all fields.');
+            return;
         }
 
+        const { data, error } = await supabase
+            .from('products')
+            .insert({
+                brand: brand.trim(),
+                name: name.trim(),
+                colourway: colourway.trim(),
+            })
+            .select()
+            .single();
+
+        if (error) {
+            Alert.alert('Error', error.message);
+            return;
+        }
+
+        Alert.alert(
+            'Success',
+            'Product created successfully!',
+            [
+                {
+                    text: 'OK',
+                    onPress: () => navigation.goBack(),
+                },
+            ]
+        );
     };
 
     return (
