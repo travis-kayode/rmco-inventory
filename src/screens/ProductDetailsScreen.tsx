@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View, Pressable } from 'react-native';
+
+import { StyleSheet, Text, View, Pressable, FlatList } from 'react-native';
 import InventoryItemRow from '../components/InventoryItemRow';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../types/navigation';
@@ -13,9 +14,11 @@ type ProductDetailsScreenProps = NativeStackScreenProps<
 >;
 
 export default function ProductDetailsScreen({
-  route, navigation,
+  route,
+  navigation,
 }: ProductDetailsScreenProps) {
   const { productId } = route.params;
+
   const [product, setProduct] = useState<Product | null>(null);
   const [productInventory, setProductInventory] = useState<InventoryItem[]>([]);
 
@@ -30,6 +33,7 @@ export default function ProductDetailsScreen({
       console.log('Error fetching product:', error.message);
       return;
     }
+
     setProduct(data);
   };
 
@@ -40,11 +44,11 @@ export default function ProductDetailsScreen({
       .eq('product_id', productId);
 
     if (error) {
-      console.log('Error fetching items for product', error.message);
+      console.log('Error fetching items for product:', error.message);
       return;
     }
-    setProductInventory(data)
 
+    setProductInventory(data);
   };
 
   useFocusEffect(
@@ -57,21 +61,29 @@ export default function ProductDetailsScreen({
   return (
     <View style={styles.container}>
       <Text style={styles.title}>{product?.name}</Text>
-      <Text>{product?.brand} · {product?.colourway} </Text>
+      <Text style={styles.subtitle}>
+        {product?.brand} · {product?.colourway}
+      </Text>
 
-
-      {productInventory.map((item) => {
-        return (
+      <FlatList
+        data={productInventory}
+        keyExtractor={(item) => item.id.toString()}
+        contentContainerStyle={styles.listContent}
+        renderItem={({ item }) => (
           <InventoryItemRow
-            key={item.id}
             size={item.size}
             condition={item.condition}
             location={item.location}
             cost={item.cost}
             asking_price={item.asking_price}
           />
-        );
-      })}
+        )}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>
+            No inventory items added yet.
+          </Text>
+        }
+      />
 
       <Pressable
         style={styles.addButton}
@@ -82,11 +94,8 @@ export default function ProductDetailsScreen({
         <Text style={styles.addButtonText}>+</Text>
       </Pressable>
     </View>
-
-
   );
 }
-
 
 const styles = StyleSheet.create({
   container: {
@@ -101,6 +110,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
+  subtitle: {
+    fontSize: 15,
+    color: '#666666',
+    marginTop: 4,
+  },
+
+  listContent: {
+    paddingTop: 20,
+    paddingBottom: 110,
+  },
+
+  emptyText: {
+    textAlign: 'center',
+    marginTop: 30,
+    color: '#777777',
+    fontSize: 16,
+  },
+
   addButton: {
     position: 'absolute',
     bottom: 30,
@@ -111,6 +138,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#111111',
     alignItems: 'center',
     justifyContent: 'center',
+    elevation: 5,
+    zIndex: 10,
   },
 
   addButtonText: {

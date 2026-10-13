@@ -1,20 +1,21 @@
-import { useState } from 'react';
+
+import { useState, useCallback } from 'react';
 import {
     Pressable,
     StyleSheet,
     Text,
     TextInput,
     View,
+    FlatList,
 } from 'react-native';
 
-import ProductRow from '../components/ProductRow';
-import type { InventoryItem } from '../types/inventory';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../types/navigation';
-import { supabase } from '../lib/supabase';
-import { Product } from '../types/inventory';
-import { useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+
+import ProductRow from '../components/ProductRow';
+import type { InventoryItem, Product } from '../types/inventory';
+import type { RootStackParamList } from '../types/navigation';
+import { supabase } from '../lib/supabase';
 
 type StockScreenProps = NativeStackScreenProps<
     RootStackParamList,
@@ -26,7 +27,6 @@ export default function StockScreen({
 }: StockScreenProps) {
     const [search, setSearch] = useState('');
     const [products, setProducts] = useState<Product[]>([]);
-    const [loading, setLoading] = useState(true);
     const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
 
     const fetchInventory = async () => {
@@ -62,6 +62,7 @@ export default function StockScreen({
             fetchInventory();
         }, [])
     );
+
     const filteredProducts = products.filter((product) => {
         const searchText = search.toLowerCase();
 
@@ -75,6 +76,7 @@ export default function StockScreen({
     return (
         <View style={styles.container}>
             <Text style={styles.title}>Arrange</Text>
+
             <View style={styles.header}>
                 <Text style={styles.heading}>Stock</Text>
 
@@ -92,42 +94,55 @@ export default function StockScreen({
                 onChangeText={setSearch}
             />
 
-            {filteredProducts.map((product) => {
-                const productInventory = inventoryItems.filter(
-                    (item) => item.product_id === product.id
-                );
+            <FlatList
+                data={filteredProducts}
+                keyExtractor={(product) => product.id.toString()}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.listContent}
+                renderItem={({ item: product }) => {
+                    const productInventory = inventoryItems.filter(
+                        (item) => item.product_id === product.id
+                    );
 
-                const sizes = productInventory.map((item) => item.size);
-                const counts: Record<string, number> = {};
-                for (const size of sizes) {
-                    if (size in counts) {
-                        counts[size] += 1;
+                    const sizes = productInventory.map(
+                        (item) => item.size
+                    );
+
+                    const counts: Record<string, number> = {};
+
+                    for (const size of sizes) {
+                        if (size in counts) {
+                            counts[size] += 1;
+                        } else {
+                            counts[size] = 1;
+                        }
                     }
-                    else {
-                        counts[size] = 1;
-                    }
-                };
 
-                const sizeDisplay = Object.entries(counts)
-                    .map(([size, count]) => `${size} ×${count}`)
-                    .join(' · ');
+                    const sizeDisplay = Object.entries(counts)
+                        .map(([size, count]) => `${size} ×${count}`)
+                        .join(' · ');
 
-                return (
-                    <ProductRow
-                        key={product.id}
-                        name={product.name}
-                        brand={product.brand}
-                        colourway={product.colourway}
-                        stockCount={productInventory.length}
-                        sizes={sizeDisplay}
-                        onPress={() => {
-                            navigation.navigate('ProductDetails', {
-                                productId: product.id,
-                            });
-                        }}
-                    />
-                );
-            })}
+                    return (
+                        <ProductRow
+                            name={product.name}
+                            brand={product.brand}
+                            colourway={product.colourway}
+                            stockCount={productInventory.length}
+                            sizes={sizeDisplay}
+                            onPress={() => {
+                                navigation.navigate('ProductDetails', {
+                                    productId: product.id,
+                                });
+                            }}
+                        />
+                    );
+                }}
+                ListEmptyComponent={
+                    <Text style={styles.emptyText}>
+                        No products found.
+                    </Text>
+                }
+            />
         </View>
     );
 }
@@ -170,5 +185,17 @@ const styles = StyleSheet.create({
     addButton: {
         fontSize: 32,
         fontWeight: '400',
+    },
+
+    listContent: {
+        paddingTop: 16,
+        paddingBottom: 30,
+    },
+
+    emptyText: {
+        textAlign: 'center',
+        marginTop: 30,
+        color: '#777777',
+        fontSize: 16,
     },
 });
