@@ -32,14 +32,18 @@ export default function StockScreen({
     const fetchInventory = async () => {
         const { data, error } = await supabase
             .from('inventory_items')
-            .select('*');
+            .select('*, sales(id)');
 
         if (error) {
             console.log('Error fetching inventory:', error.message);
             return;
         }
 
-        setInventoryItems(data);
+        const availableItems = (data ?? []).filter(
+            (item) => item.sales === null
+        );
+
+        setInventoryItems(availableItems);
     };
 
     const fetchProducts = async () => {

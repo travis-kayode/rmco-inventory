@@ -5,10 +5,10 @@ type InventoryItemRowProps = {
     condition: string;
     location: string;
     cost: number;
-    asking_price: number | null;
     expanded: boolean;
     onPress: () => void;
     date_added: string;
+    onSell: () => void;
 };
 
 export default function InventoryItemRow({
@@ -16,10 +16,10 @@ export default function InventoryItemRow({
     condition,
     location,
     cost,
-    asking_price,
     expanded,
     onPress,
     date_added,
+    onSell,
 
 }: InventoryItemRowProps) {
     return (
@@ -41,7 +41,11 @@ export default function InventoryItemRow({
                             <Text>Edit Item</Text>
                         </Pressable>
 
-                        <Pressable style={styles.actionButton}>
+                        <Pressable
+                            style={styles.actionButton}
+                            onPress={onSell}
+                        >
+
                             <Text>Sell Item</Text>
                         </Pressable>
                     </View>

@@ -1,5 +1,8 @@
 
-import { StyleSheet, Text, View, Pressable, FlatList } from 'react-native';
+import {
+  StyleSheet, Text, View, Pressable, FlatList, Modal, TextInput,
+  Keyboard, Alert,
+} from 'react-native';
 import InventoryItemRow from '../components/InventoryItemRow';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../types/navigation';
@@ -22,6 +25,9 @@ export default function ProductDetailsScreen({
   const [product, setProduct] = useState<Product | null>(null);
   const [productInventory, setProductInventory] = useState<InventoryItem[]>([]);
   const [expandedItemId, setExpandedItemId] = useState<number | null>(null);
+  const [sellingItemId, setSellingItemId] = useState<number | null>(null);
+  const [salePrice, setSalePrice] = useState('');
+  const [savingSale, setSavingSale] = useState(false);
 
   const fetchProduct = async () => {
     const { data, error } = await supabase
@@ -41,15 +47,64 @@ export default function ProductDetailsScreen({
   const fetchInventory = async () => {
     const { data, error } = await supabase
       .from('inventory_items')
-      .select('*')
+      .select('*, sales(id)')
       .eq('product_id', productId);
 
     if (error) {
-      console.log('Error fetching items for product:', error.message);
+      console.log('Error fetching inventory:', error.message);
       return;
     }
 
-    setProductInventory(data);
+    const availableItems = (data ?? []).filter(
+      (item) => item.sales === null
+    );
+
+
+    setProductInventory(availableItems);
+  };
+
+  const handleConfirmSale = async () => {
+    if (sellingItemId === null || savingSale) {
+      return;
+    }
+
+    const price = Number(salePrice);
+
+    if (!salePrice.trim() || !Number.isFinite(price) || price < 0) {
+      Alert.alert('Invalid price', 'Please enter a valid selling price.');
+      return;
+    }
+
+    setSavingSale(true);
+
+    const today = new Date();
+    const soldDate = [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, '0'),
+      String(today.getDate()).padStart(2, '0'),
+    ].join('-');
+
+    const { error } = await supabase
+      .from('sales')
+      .insert({
+        inventory_item_id: sellingItemId,
+        sale_price: price,
+        sold_date: soldDate,
+      });
+
+    setSavingSale(false);
+
+    if (error) {
+      Alert.alert('Sale failed', error.message);
+      return;
+    }
+
+    setSellingItemId(null);
+    setSalePrice('');
+    setExpandedItemId(null);
+    await fetchInventory();
+
+    Alert.alert('Success', 'Sale recorded successfully!');
   };
 
   useFocusEffect(
@@ -83,6 +138,7 @@ export default function ProductDetailsScreen({
                 expandedItemId === item.id ? null : item.id
               );
             }}
+            onSell={() => setSellingItemId(item.id)}
           />
         )}
         ListEmptyComponent={
@@ -91,6 +147,49 @@ export default function ProductDetailsScreen({
           </Text>
         }
       />
+
+      <Modal
+        visible={sellingItemId !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSellingItemId(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Sell Item</Text>
+
+            <Text>Sale Price (£)</Text>
+            <TextInput
+              style={styles.saleInput}
+              placeholder="Enter selling price"
+              keyboardType="decimal-pad"
+              value={salePrice}
+              onChangeText={setSalePrice}
+            />
+
+            <Pressable
+              style={styles.confirmButton}
+              onPress={handleConfirmSale}
+              disabled={savingSale}
+            >
+              <Text style={styles.confirmButtonText}>
+                {savingSale ? 'Saving...' : 'Confirm Sale'}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.cancelButton}
+              onPress={() => {
+                setSellingItemId(null);
+                setSalePrice('');
+                Keyboard.dismiss();
+              }}
+            >
+              <Text>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       <Pressable
         style={styles.addButton}
@@ -152,5 +251,52 @@ const styles = StyleSheet.create({
   addButtonText: {
     color: '#ffffff',
     fontSize: 30,
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 24,
+  },
+
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '600',
+    marginBottom: 20,
+  },
+
+  saleInput: {
+    borderWidth: 1,
+    borderColor: '#d1d1d1',
+    borderRadius: 8,
+    padding: 14,
+    marginTop: 10,
+    marginBottom: 20,
+    fontSize: 16,
+  },
+
+  confirmButton: {
+    backgroundColor: '#111111',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+
+  confirmButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  cancelButton: {
+    padding: 16,
+    alignItems: 'center',
   },
 });
