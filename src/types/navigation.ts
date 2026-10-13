@@ -5,4 +5,7 @@ export type RootStackParamList = {
   };
   AddProduct: undefined;
   Login: undefined;
+  AddInventoryItem: {
+    productId: number;
+  };
 };

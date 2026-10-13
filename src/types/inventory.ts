@@ -14,6 +14,6 @@ export type InventoryItem = {
     condition: Condition;
     location: string;
     cost: number;
-    asking_price: number;
+    asking_price: number | null;
     date_added: string;
 }

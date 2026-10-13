@@ -5,7 +5,7 @@ type InventoryItemRowProps = {
     condition: string,
     location: string,
     cost: number,
-    asking_price: number,
+    asking_price: number | null,
 };
 
 export default function InventoryItemRow({

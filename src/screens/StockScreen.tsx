@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
     Pressable,
     StyleSheet,
@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 
 import ProductRow from '../components/ProductRow';
-import { inventoryItems } from '../data/sampleInventory';
+import type { InventoryItem } from '../types/inventory';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
 import { supabase } from '../lib/supabase';
@@ -27,6 +27,20 @@ export default function StockScreen({
     const [search, setSearch] = useState('');
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(true);
+    const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+
+    const fetchInventory = async () => {
+        const { data, error } = await supabase
+            .from('inventory_items')
+            .select('*');
+
+        if (error) {
+            console.log('Error fetching inventory:', error.message);
+            return;
+        }
+
+        setInventoryItems(data);
+    };
 
     const fetchProducts = async () => {
         const { data, error } = await supabase
@@ -45,9 +59,9 @@ export default function StockScreen({
     useFocusEffect(
         useCallback(() => {
             fetchProducts();
+            fetchInventory();
         }, [])
     );
-
     const filteredProducts = products.filter((product) => {
         const searchText = search.toLowerCase();
 

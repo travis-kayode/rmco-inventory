@@ -1,9 +1,11 @@
-import { StyleSheet, Text, View } from 'react-native';
-import { products } from '../data/sampleProducts';
-import { inventoryItems } from '../data/sampleInventory';
+import { StyleSheet, Text, View, Pressable } from 'react-native';
 import InventoryItemRow from '../components/InventoryItemRow';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../types/navigation';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../types/navigation';
+import { useState, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { supabase } from '../lib/supabase';
+import type { Product, InventoryItem } from '../types/inventory';
 
 type ProductDetailsScreenProps = NativeStackScreenProps<
   RootStackParamList,
@@ -11,16 +13,45 @@ type ProductDetailsScreenProps = NativeStackScreenProps<
 >;
 
 export default function ProductDetailsScreen({
-  route,
+  route, navigation,
 }: ProductDetailsScreenProps) {
   const { productId } = route.params;
+  const [product, setProduct] = useState<Product | null>(null);
+  const [productInventory, setProductInventory] = useState<InventoryItem[]>([]);
 
-  const product = products.find(
-    (product) => product.id === productId
-  );
+  const fetchProduct = async () => {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('id', productId)
+      .single();
 
-  const productInventory = inventoryItems.filter(
-    (item) => item.product_id === productId
+    if (error) {
+      console.log('Error fetching product:', error.message);
+      return;
+    }
+    setProduct(data);
+  };
+
+  const fetchInventory = async () => {
+    const { data, error } = await supabase
+      .from('inventory_items')
+      .select('*')
+      .eq('product_id', productId);
+
+    if (error) {
+      console.log('Error fetching items for product', error.message);
+      return;
+    }
+    setProductInventory(data)
+
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchProduct();
+      fetchInventory();
+    }, [productId])
   );
 
   return (
@@ -41,7 +72,18 @@ export default function ProductDetailsScreen({
           />
         );
       })}
+
+      <Pressable
+        style={styles.addButton}
+        onPress={() =>
+          navigation.navigate('AddInventoryItem', { productId })
+        }
+      >
+        <Text style={styles.addButtonText}>+</Text>
+      </Pressable>
     </View>
+
+
   );
 }
 
@@ -57,5 +99,22 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '600',
+  },
+
+  addButton: {
+    position: 'absolute',
+    bottom: 30,
+    alignSelf: 'center',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#111111',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  addButtonText: {
+    color: '#ffffff',
+    fontSize: 30,
   },
 });

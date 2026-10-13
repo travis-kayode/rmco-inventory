@@ -11,6 +11,7 @@ import StockScreen from './src/screens/StockScreen';
 import ProductDetailsScreen from './src/screens/ProductDetailsScreen';
 import AddProductScreen from './src/screens/AddProductScreen';
 import LoginScreen from './src/screens/LoginScreen';
+import AddInventoryItemScreen from './src/screens/AddInventoryItemScreen'
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -99,10 +100,15 @@ export default function App() {
             <Stack.Screen name="Stock" component={StockScreen} />
             <Stack.Screen name="ProductDetails" component={ProductDetailsScreen} />
             <Stack.Screen name="AddProduct" component={AddProductScreen} />
+            <Stack.Screen
+              name="AddInventoryItem"
+              component={AddInventoryItemScreen}
+            />
           </>
         ) : (
           <Stack.Screen name="Login" component={LoginScreen} />
         )}
+
       </Stack.Navigator>
 
       <StatusBar style="auto" />
