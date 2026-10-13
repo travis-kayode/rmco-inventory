@@ -21,6 +21,7 @@ export default function ProductDetailsScreen({
 
   const [product, setProduct] = useState<Product | null>(null);
   const [productInventory, setProductInventory] = useState<InventoryItem[]>([]);
+  const [expandedItemId, setExpandedItemId] = useState<number | null>(null);
 
   const fetchProduct = async () => {
     const { data, error } = await supabase
@@ -75,7 +76,13 @@ export default function ProductDetailsScreen({
             condition={item.condition}
             location={item.location}
             cost={item.cost}
-            asking_price={item.asking_price}
+            date_added={item.date_added}
+            expanded={expandedItemId === item.id}
+            onPress={() => {
+              setExpandedItemId(
+                expandedItemId === item.id ? null : item.id
+              );
+            }}
           />
         )}
         ListEmptyComponent={
