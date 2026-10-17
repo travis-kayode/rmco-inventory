@@ -98,6 +98,8 @@ export default function StockScreen({
                 onChangeText={setSearch}
             />
 
+
+
             <FlatList
                 data={filteredProducts}
                 keyExtractor={(product) => product.id.toString()}

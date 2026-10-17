@@ -1,26 +1,25 @@
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { RootStackParamList } from './src/types/navigation';
 import { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import type { Session } from '@supabase/supabase-js';
+
 import { supabase } from './src/lib/supabase';
-
-import StockScreen from './src/screens/StockScreen';
-import ProductDetailsScreen from './src/screens/ProductDetailsScreen';
-import AddProductScreen from './src/screens/AddProductScreen';
 import LoginScreen from './src/screens/LoginScreen';
-import AddInventoryItemScreen from './src/screens/AddInventoryItemScreen'
+import MainTabs from './src/navigation/MainTabs';
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
+type AuthStackParamList = {
+  Login: undefined;
+  Main: undefined;
+};
+
+const Stack = createNativeStackNavigator<AuthStackParamList>();
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAuthorised, setIsAuthorised] = useState(false);
-
-
 
   useEffect(() => {
     let active = true;
@@ -58,6 +57,7 @@ export default function App() {
 
     const restoreSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
+
       if (active) {
         await checkAccess(session);
       }
@@ -67,7 +67,6 @@ export default function App() {
 
     const { data: { subscription } } =
       supabase.auth.onAuthStateChange((_event, session) => {
-        // Defer Supabase calls outside the auth callback.
         setTimeout(() => {
           if (active) {
             void checkAccess(session);
@@ -92,23 +91,15 @@ export default function App() {
       </View>
     );
   }
+
   return (
     <NavigationContainer>
-      <Stack.Navigator>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
         {session && isAuthorised ? (
-          <>
-            <Stack.Screen name="Stock" component={StockScreen} />
-            <Stack.Screen name="ProductDetails" component={ProductDetailsScreen} />
-            <Stack.Screen name="AddProduct" component={AddProductScreen} />
-            <Stack.Screen
-              name="AddInventoryItem"
-              component={AddInventoryItemScreen}
-            />
-          </>
+          <Stack.Screen name="Main" component={MainTabs} />
         ) : (
           <Stack.Screen name="Login" component={LoginScreen} />
         )}
-
       </Stack.Navigator>
 
       <StatusBar style="auto" />
