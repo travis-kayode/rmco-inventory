@@ -1,5 +1,5 @@
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
     Pressable,
     StyleSheet,
@@ -7,75 +7,181 @@ import {
     TextInput,
     View,
     FlatList,
+    ActivityIndicator,
 } from 'react-native';
+
 
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import ProductRow from '../components/ProductRow';
-import type { InventoryItem, Product } from '../types/inventory';
+import type { Product } from '../types/inventory';
 import type { RootStackParamList } from '../types/navigation';
 import { supabase } from '../lib/supabase';
+
+import StockFilterModal, {
+    type StockFilters,
+} from '../components/StockFilterModal';
 
 type StockScreenProps = NativeStackScreenProps<
     RootStackParamList,
     'Stock'
 >;
 
+type StockProduct = Product & {
+    stock_count: number;
+    sizes: Record<string, number>;
+};
+
+const PAGE_SIZE = 20;
+
 export default function StockScreen({
     navigation,
 }: StockScreenProps) {
     const [search, setSearch] = useState('');
-    const [products, setProducts] = useState<Product[]>([]);
-    const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+    const [products, setProducts] = useState<StockProduct[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-    const fetchInventory = async () => {
-        const { data, error } = await supabase
-            .from('inventory_items')
-            .select('*, sales(id)');
+    const requestId = useRef(0);
+    const loadingRef = useRef(false);
+    const nextPageRef = useRef(0);
+    const hasMoreRef = useRef(true);
 
-        if (error) {
-            console.log('Error fetching inventory:', error.message);
-            return;
+    const [filterModalVisible, setFilterModalVisible] = useState(false);
+
+    const [filters, setFilters] = useState<StockFilters>({
+        condition: null,
+        size: null,
+        location: null,
+    });
+
+    const [availableSizes, setAvailableSizes] = useState<string[]>([]);
+    const [availableLocations, setAvailableLocations] = useState<string[]>([]);
+
+    const fetchPage = async (
+        searchText: string,
+        page: number,
+        currentRequestId: number
+    ) => {
+        if (loadingRef.current) return;
+
+        loadingRef.current = true;
+
+        if (page === 0) {
+            setLoading(true);
+        } else {
+            setLoadingMore(true);
         }
 
-        const availableItems = (data ?? []).filter(
-            (item) => item.sales === null
-        );
+        setErrorMessage(null);
 
-        setInventoryItems(availableItems);
+        try {
+            const { data, error } = await supabase.rpc('search_stock', {
+                search_term: searchText.trim(),
+                page_size: PAGE_SIZE,
+                page_offset: page * PAGE_SIZE,
+                filter_size: filters.size,
+                filter_condition: filters.condition,
+                filter_location: filters.location,
+            });
+
+            // Ignore outdated requests.
+            if (currentRequestId !== requestId.current) {
+                return;
+            }
+
+            if (error) {
+                console.log('Error fetching stock:', error.message);
+                setErrorMessage('Unable to load stock. Please try again.');
+                return;
+            }
+
+            const newProducts = (data ?? []) as StockProduct[];
+
+            setProducts((previous) =>
+                page === 0
+                    ? newProducts
+                    : [...previous, ...newProducts]
+            );
+
+            nextPageRef.current = page + 1;
+            hasMoreRef.current = newProducts.length === PAGE_SIZE;
+        } catch (error) {
+            if (currentRequestId === requestId.current) {
+                console.log('Unexpected stock error:', error);
+                setErrorMessage('Unable to load stock. Please try again.');
+            }
+        } finally {
+            if (currentRequestId === requestId.current) {
+                loadingRef.current = false;
+                setLoading(false);
+                setLoadingMore(false);
+            }
+        }
     };
 
-    const fetchProducts = async () => {
-        const { data, error } = await supabase
-            .from('products')
-            .select('*')
-            .order('name', { ascending: true });
+    const fetchFilterOptions = async () => {
+        const { data, error } = await supabase.rpc(
+            'get_stock_filter_options'
+        );
 
         if (error) {
-            console.log('Error fetching products:', error.message);
+            console.log('Error fetching filter options:', error.message);
             return;
         }
 
-        setProducts(data);
+        setAvailableSizes(data?.sizes ?? []);
+        setAvailableLocations(data?.locations ?? []);
     };
 
     useFocusEffect(
         useCallback(() => {
-            fetchProducts();
-            fetchInventory();
+            void fetchFilterOptions();
         }, [])
     );
 
-    const filteredProducts = products.filter((product) => {
-        const searchText = search.toLowerCase();
+    useFocusEffect(
+        useCallback(() => {
+            const currentRequestId = ++requestId.current;
 
-        return (
-            product.name.toLowerCase().includes(searchText) ||
-            product.brand.toLowerCase().includes(searchText) ||
-            product.colourway.toLowerCase().includes(searchText)
+            loadingRef.current = false;
+            nextPageRef.current = 0;
+            hasMoreRef.current = true;
+
+            setProducts([]);
+            setLoading(true);
+            setLoadingMore(false);
+            setErrorMessage(null);
+
+            const timeout = setTimeout(() => {
+                void fetchPage(search, 0, currentRequestId);
+            }, 300);
+
+            return () => {
+                clearTimeout(timeout);
+                requestId.current++;
+            };
+        }, [search, filters])
+    );
+
+    const loadMore = () => {
+        if (
+            loadingRef.current ||
+            !hasMoreRef.current ||
+            nextPageRef.current === 0 ||
+            loading
+        ) {
+            return;
+        }
+
+        void fetchPage(
+            search,
+            nextPageRef.current,
+            requestId.current
         );
-    });
+    };
 
     return (
         <View style={styles.container}>
@@ -98,34 +204,31 @@ export default function StockScreen({
                 onChangeText={setSearch}
             />
 
-
+            <Pressable
+                style={styles.filtersButton}
+                onPress={() => setFilterModalVisible(true)}
+            >
+                <Text style={styles.filtersButtonText}>
+                    Filters
+                    {Object.values(filters).some((value) => value !== null)
+                        ? ' • Active'
+                        : ''}
+                </Text>
+            </Pressable>
 
             <FlatList
-                data={filteredProducts}
+                data={products}
                 keyExtractor={(product) => product.id.toString()}
                 keyboardShouldPersistTaps="handled"
                 contentContainerStyle={styles.listContent}
+                onEndReached={loadMore}
+                onEndReachedThreshold={0.5}
                 renderItem={({ item: product }) => {
-                    const productInventory = inventoryItems.filter(
-                        (item) => item.product_id === product.id
-                    );
-
-                    const sizes = productInventory.map(
-                        (item) => item.size
-                    );
-
-                    const counts: Record<string, number> = {};
-
-                    for (const size of sizes) {
-                        if (size in counts) {
-                            counts[size] += 1;
-                        } else {
-                            counts[size] = 1;
-                        }
-                    }
-
-                    const sizeDisplay = Object.entries(counts)
-                        .map(([size, count]) => `${size} ×${count}`)
+                    const sizeDisplay = Object.entries(product.sizes)
+                        .map(
+                            ([size, count]) =>
+                                `${size} ×${count}`
+                        )
                         .join(' · ');
 
                     return (
@@ -133,7 +236,7 @@ export default function StockScreen({
                             name={product.name}
                             brand={product.brand}
                             colourway={product.colourway}
-                            stockCount={productInventory.length}
+                            stockCount={product.stock_count}
                             sizes={sizeDisplay}
                             onPress={() => {
                                 navigation.navigate('ProductDetails', {
@@ -144,10 +247,40 @@ export default function StockScreen({
                     );
                 }}
                 ListEmptyComponent={
-                    <Text style={styles.emptyText}>
-                        No products found.
-                    </Text>
+                    loading ? (
+                        <ActivityIndicator
+                            size="large"
+                            style={styles.indicator}
+                        />
+                    ) : (
+                        <Text style={styles.emptyText}>
+                            {errorMessage ?? 'No products found.'}
+                        </Text>
+                    )
                 }
+                ListFooterComponent={
+                    loadingMore ? (
+                        <ActivityIndicator
+                            size="small"
+                            style={styles.indicator}
+                        />
+                    ) : products.length > 0 && errorMessage ? (
+                        <Text style={styles.emptyText}>
+                            {errorMessage}
+                        </Text>
+                    ) : null
+                }
+            />
+            <StockFilterModal
+                visible={filterModalVisible}
+                filters={filters}
+                sizes={availableSizes}
+                locations={availableLocations}
+                onApply={(newFilters) => {
+                    setFilters(newFilters);
+                    setFilterModalVisible(false);
+                }}
+                onClose={() => setFilterModalVisible(false)}
             />
         </View>
     );
@@ -203,5 +336,53 @@ const styles = StyleSheet.create({
         marginTop: 30,
         color: '#777777',
         fontSize: 16,
+    },
+
+    indicator: {
+        marginVertical: 24,
+    },
+
+    filterRow: {
+        flexDirection: 'row',
+        gap: 10,
+        marginTop: 15,
+    },
+
+    filterButton: {
+        paddingVertical: 10,
+        paddingHorizontal: 18,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#d1d1d1',
+    },
+
+    filterButtonSelected: {
+        backgroundColor: '#111111',
+        borderColor: '#111111',
+    },
+
+    filterText: {
+        color: '#111111',
+        fontSize: 14,
+    },
+
+    filterTextSelected: {
+        color: '#ffffff',
+    },
+
+    filtersButton: {
+        alignSelf: 'flex-start',
+        marginTop: 12,
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderWidth: 1,
+        borderColor: '#d1d1d1',
+        borderRadius: 8,
+    },
+
+    filtersButtonText: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#111',
     },
 });
