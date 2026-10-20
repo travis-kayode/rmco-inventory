@@ -12,11 +12,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 
 import { supabase } from '../lib/supabase';
-import type { Sale } from '../types/inventory';
+import type { SalesHistoryItem } from '../types/inventory';
+import { fetchSalesHistory } from '../services/salesHistory';
 import { colors } from '../theme/colours';
 
 export default function SalesScreen() {
-  const [sales, setSales] = useState<Sale[]>([]);
+  const [sales, setSales] = useState<SalesHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -24,36 +25,15 @@ export default function SalesScreen() {
     setLoading(true);
     setErrorMessage(null);
 
-    const { data, error } = await supabase
-      .from('sales')
-      .select(`
-        id,
-        sale_price,
-        sold_date,
-        inventory_items (
-          id,
-          size,
-          condition,
-          cost,
-          products (
-            brand,
-            name,
-            colourway
-          )
-        )
-      `)
-      .order('sold_date', { ascending: false })
-      .returns<Sale[]>();
-
-    if (error) {
-      console.log('Error fetching sales:', error.message);
+    try {
+      const history = await fetchSalesHistory();
+      setSales(history);
+    } catch (error) {
+      console.error('Error fetching sales:', error);
       setErrorMessage('Unable to load sales. Please try again.');
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setSales(data ?? []);
-    setLoading(false);
   };
 
   useFocusEffect(
@@ -63,12 +43,12 @@ export default function SalesScreen() {
   );
 
   const totalRevenue = sales.reduce(
-    (total, sale) => total + sale.sale_price,
+    (total, sale) => total + sale.salePrice,
     0
   );
 
   const totalCost = sales.reduce(
-    (total, sale) => total + sale.inventory_items.cost,
+    (total, sale) => total + sale.cost,
     0
   );
 
@@ -154,28 +134,32 @@ export default function SalesScreen() {
     </>
   );
 
-  const renderSale = ({ item }: { item: Sale }) => {
-    const inventory = item.inventory_items;
-    const product = inventory.products;
-    const profit = item.sale_price - inventory.cost;
+
+  const renderSale = ({ item }: { item: SalesHistoryItem }) => {
+    const profit = item.salePrice - item.cost;
 
     return (
       <View style={styles.saleCard}>
         <View style={styles.saleHeader}>
           <View style={styles.productInfo}>
             <Text style={styles.productName}>
-              {product.brand} {product.name}
+              {item.brand} {item.name}
             </Text>
 
             <Text style={styles.details}>
-              {product.colourway} · {inventory.size} ·{' '}
-              {inventory.condition}
+              {[
+                item.colourway,
+                item.size,
+                item.condition,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
             </Text>
           </View>
 
           <View style={styles.priceColumn}>
             <Text style={styles.salePrice}>
-              {formatMoney(item.sale_price)}
+              {formatMoney(item.salePrice)}
             </Text>
 
             <Text
@@ -204,17 +188,18 @@ export default function SalesScreen() {
             />
 
             <Text style={styles.dateText}>
-              {formatDate(item.sold_date)}
+              {formatDate(item.soldDate.slice(0, 10))}
             </Text>
           </View>
 
           <Text style={styles.costText}>
-            Cost: {formatMoney(inventory.cost)}
+            Cost: {formatMoney(item.cost)}
           </Text>
         </View>
       </View>
     );
   };
+
 
   if (loading) {
     return (
@@ -259,7 +244,7 @@ export default function SalesScreen() {
     <View style={styles.container}>
       <FlatList
         data={sales}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item) => item.id}
         renderItem={renderSale}
         ListHeaderComponent={renderSummary}
         ListEmptyComponent={
