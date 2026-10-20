@@ -9,8 +9,7 @@ import {
     FlatList,
     ActivityIndicator,
 } from 'react-native';
-
-
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -18,6 +17,8 @@ import ProductRow from '../components/ProductRow';
 import type { Product } from '../types/inventory';
 import type { RootStackParamList } from '../types/navigation';
 import { supabase } from '../lib/supabase';
+import { colors } from '../theme/colours';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import StockFilterModal, {
     type StockFilters,
@@ -60,6 +61,12 @@ export default function StockScreen({
     const [availableSizes, setAvailableSizes] = useState<string[]>([]);
     const [availableLocations, setAvailableLocations] = useState<string[]>([]);
 
+    const insets = useSafeAreaInsets();
+
+    const activeFilterCount = Object.values(filters).filter(
+        (value) => value !== null
+    ).length;
+
     const fetchPage = async (
         searchText: string,
         page: number,
@@ -87,10 +94,7 @@ export default function StockScreen({
                 filter_location: filters.location,
             });
 
-            // Ignore outdated requests.
-            if (currentRequestId !== requestId.current) {
-                return;
-            }
+            if (currentRequestId !== requestId.current) return;
 
             if (error) {
                 console.log('Error fetching stock:', error.message);
@@ -101,9 +105,7 @@ export default function StockScreen({
             const newProducts = (data ?? []) as StockProduct[];
 
             setProducts((previous) =>
-                page === 0
-                    ? newProducts
-                    : [...previous, ...newProducts]
+                page === 0 ? newProducts : [...previous, ...newProducts]
             );
 
             nextPageRef.current = page + 1;
@@ -184,37 +186,97 @@ export default function StockScreen({
     };
 
     return (
-        <View style={styles.container}>
-            <Text style={styles.title}>Arrange</Text>
-
+        <View
+            style={[
+                styles.container,
+                { paddingTop: insets.top + 12 },
+            ]}
+        >
             <View style={styles.header}>
-                <Text style={styles.heading}>Stock</Text>
+                <View>
+                    <Text style={styles.eyebrow}>RM&CO INVENTORY</Text>
+                    <Text style={styles.heading}>Stock</Text>
+                </View>
 
                 <Pressable
+                    style={styles.addButton}
                     onPress={() => navigation.navigate('AddProduct')}
+                    accessibilityLabel="Add product"
                 >
-                    <Text style={styles.addButton}>+</Text>
+                    <Ionicons name="add" size={24} color={colors.background} />
                 </Pressable>
             </View>
 
-            <TextInput
-                style={styles.searchInput}
-                placeholder="Search inventory..."
-                value={search}
-                onChangeText={setSearch}
-            />
+            <View style={styles.searchRow}>
+                <View style={styles.searchContainer}>
+                    <Ionicons
+                        name="search-outline"
+                        size={20}
+                        color={colors.textMuted}
+                    />
+                    <TextInput
+                        style={styles.searchInput}
+                        placeholder="Search inventory..."
+                        placeholderTextColor={colors.textMuted}
+                        value={search}
+                        onChangeText={setSearch}
+                        autoCorrect={false}
+                        returnKeyType="search"
+                    />
+                    {search.length > 0 && (
+                        <Pressable onPress={() => setSearch('')}>
+                            <Ionicons
+                                name="close-circle"
+                                size={19}
+                                color={colors.textMuted}
+                            />
+                        </Pressable>
+                    )}
+                </View>
 
-            <Pressable
-                style={styles.filtersButton}
-                onPress={() => setFilterModalVisible(true)}
-            >
-                <Text style={styles.filtersButtonText}>
-                    Filters
-                    {Object.values(filters).some((value) => value !== null)
-                        ? ' • Active'
-                        : ''}
-                </Text>
-            </Pressable>
+                <Pressable
+                    style={[
+                        styles.filtersButton,
+                        activeFilterCount > 0 && styles.filtersButtonActive,
+                    ]}
+                    onPress={() => setFilterModalVisible(true)}
+                    accessibilityLabel="Open stock filters"
+                >
+                    <Ionicons
+                        name="options-outline"
+                        size={21}
+                        color={
+                            activeFilterCount > 0
+                                ? colors.primary
+                                : colors.text
+                        }
+                    />
+                    {activeFilterCount > 0 && (
+                        <View style={styles.filterCount}>
+                            <Text style={styles.filterCountText}>
+                                {activeFilterCount}
+                            </Text>
+                        </View>
+                    )}
+                </Pressable>
+            </View>
+
+            <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>AVAILABLE PRODUCTS</Text>
+                {activeFilterCount > 0 && (
+                    <Pressable
+                        onPress={() =>
+                            setFilters({
+                                condition: null,
+                                size: null,
+                                location: null,
+                            })
+                        }
+                    >
+                        <Text style={styles.clearFilters}>Clear filters</Text>
+                    </Pressable>
+                )}
+            </View>
 
             <FlatList
                 data={products}
@@ -225,10 +287,7 @@ export default function StockScreen({
                 onEndReachedThreshold={0.5}
                 renderItem={({ item: product }) => {
                     const sizeDisplay = Object.entries(product.sizes)
-                        .map(
-                            ([size, count]) =>
-                                `${size} ×${count}`
-                        )
+                        .map(([size, count]) => `${size} ×${count}`)
                         .join(' · ');
 
                     return (
@@ -238,11 +297,11 @@ export default function StockScreen({
                             colourway={product.colourway}
                             stockCount={product.stock_count}
                             sizes={sizeDisplay}
-                            onPress={() => {
+                            onPress={() =>
                                 navigation.navigate('ProductDetails', {
                                     productId: product.id,
-                                });
-                            }}
+                                })
+                            }
                         />
                     );
                 }}
@@ -250,27 +309,39 @@ export default function StockScreen({
                     loading ? (
                         <ActivityIndicator
                             size="large"
+                            color={colors.primary}
                             style={styles.indicator}
                         />
                     ) : (
-                        <Text style={styles.emptyText}>
-                            {errorMessage ?? 'No products found.'}
-                        </Text>
+                        <View style={styles.emptyContainer}>
+                            <Ionicons
+                                name="cube-outline"
+                                size={36}
+                                color={colors.textMuted}
+                            />
+                            <Text style={styles.emptyTitle}>
+                                {errorMessage ? 'Something went wrong' : 'No products found'}
+                            </Text>
+                            <Text style={styles.emptyText}>
+                                {errorMessage ??
+                                    'Try another search or adjust your filters.'}
+                            </Text>
+                        </View>
                     )
                 }
                 ListFooterComponent={
                     loadingMore ? (
                         <ActivityIndicator
                             size="small"
+                            color={colors.primary}
                             style={styles.indicator}
                         />
                     ) : products.length > 0 && errorMessage ? (
-                        <Text style={styles.emptyText}>
-                            {errorMessage}
-                        </Text>
+                        <Text style={styles.emptyText}>{errorMessage}</Text>
                     ) : null
                 }
             />
+
             <StockFilterModal
                 visible={filterModalVisible}
                 filters={filters}
@@ -289,100 +360,130 @@ export default function StockScreen({
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#ffffff',
-        paddingHorizontal: 20,
-        paddingTop: 60,
+        backgroundColor: colors.background,
+        paddingHorizontal: 16,
     },
-
-    title: {
-        fontSize: 32,
-        fontWeight: 'bold',
-    },
-
-    heading: {
-        fontSize: 24,
-        fontWeight: '600',
-    },
-
-    searchInput: {
-        height: 48,
-        borderWidth: 1,
-        borderColor: '#d1d1d1',
-        borderRadius: 8,
-        paddingHorizontal: 15,
-        marginTop: 20,
-        fontSize: 16,
-    },
-
     header: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        marginTop: 30,
+        justifyContent: 'space-between',
+        marginBottom: 24,
     },
-
+    eyebrow: {
+        color: colors.primary,
+        fontSize: 11,
+        fontWeight: '700',
+        letterSpacing: 1.3,
+        marginBottom: 5,
+    },
+    heading: {
+        color: colors.text,
+        fontSize: 30,
+        fontWeight: '700',
+    },
     addButton: {
-        fontSize: 32,
-        fontWeight: '400',
+        width: 46,
+        height: 46,
+        borderRadius: 13,
+        backgroundColor: colors.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-
+    searchRow: {
+        flexDirection: 'row',
+        gap: 10,
+        marginBottom: 24,
+    },
+    searchContainer: {
+        flex: 1,
+        height: 48,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 12,
+        paddingHorizontal: 14,
+    },
+    searchInput: {
+        flex: 1,
+        color: colors.text,
+        fontSize: 15,
+        paddingVertical: 0,
+    },
+    filtersButton: {
+        width: 48,
+        height: 48,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.surface,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    filtersButtonActive: {
+        borderColor: colors.primary,
+    },
+    filterCount: {
+        position: 'absolute',
+        top: -6,
+        right: -6,
+        backgroundColor: colors.primary,
+        borderRadius: 10,
+        minWidth: 19,
+        height: 19,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    filterCountText: {
+        color: colors.background,
+        fontSize: 11,
+        fontWeight: '700',
+    },
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 12,
+    },
+    sectionTitle: {
+        color: colors.textMuted,
+        fontSize: 11,
+        fontWeight: '700',
+        letterSpacing: 1,
+    },
+    clearFilters: {
+        color: colors.primary,
+        fontSize: 12,
+        fontWeight: '600',
+    },
     listContent: {
-        paddingTop: 16,
         paddingBottom: 30,
+        flexGrow: 1,
     },
-
-    emptyText: {
-        textAlign: 'center',
-        marginTop: 30,
-        color: '#777777',
-        fontSize: 16,
-    },
-
     indicator: {
         marginVertical: 24,
     },
-
-    filterRow: {
-        flexDirection: 'row',
+    emptyContainer: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 24,
+        paddingVertical: 50,
         gap: 10,
-        marginTop: 15,
     },
-
-    filterButton: {
-        paddingVertical: 10,
-        paddingHorizontal: 18,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: '#d1d1d1',
-    },
-
-    filterButtonSelected: {
-        backgroundColor: '#111111',
-        borderColor: '#111111',
-    },
-
-    filterText: {
-        color: '#111111',
-        fontSize: 14,
-    },
-
-    filterTextSelected: {
-        color: '#ffffff',
-    },
-
-    filtersButton: {
-        alignSelf: 'flex-start',
-        marginTop: 12,
-        paddingVertical: 10,
-        paddingHorizontal: 16,
-        borderWidth: 1,
-        borderColor: '#d1d1d1',
-        borderRadius: 8,
-    },
-
-    filtersButtonText: {
-        fontSize: 14,
+    emptyTitle: {
+        color: colors.text,
+        fontSize: 17,
         fontWeight: '600',
-        color: '#111',
+        marginTop: 8,
+    },
+    emptyText: {
+        color: colors.textMuted,
+        fontSize: 14,
+        textAlign: 'center',
+        lineHeight: 21,
     },
 });
+

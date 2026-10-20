@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
@@ -9,12 +9,26 @@ import { supabase } from './src/lib/supabase';
 import LoginScreen from './src/screens/LoginScreen';
 import MainTabs from './src/navigation/MainTabs';
 
+
+
 type AuthStackParamList = {
   Login: undefined;
   Main: undefined;
 };
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
+
+const navigationTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: '#10151D',
+    card: '#1C2531',
+    border: '#293545',
+    text: '#F4F7FA',
+    primary: '#20D69F',
+  },
+};
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -82,18 +96,25 @@ export default function App() {
 
   if (loading) {
     return (
-      <View style={{
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-      }}>
-        <ActivityIndicator size="large" />
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: '#10151D',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
+        <ActivityIndicator
+          size="large"
+          color="#20D69F"
+        />
+        <StatusBar style="light" />
       </View>
     );
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer theme={navigationTheme}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {session && isAuthorised ? (
           <Stack.Screen name="Main" component={MainTabs} />
@@ -102,7 +123,7 @@ export default function App() {
         )}
       </Stack.Navigator>
 
-      <StatusBar style="auto" />
+      <StatusBar style="light" />
     </NavigationContainer>
   );
 }

@@ -1,119 +1,357 @@
+
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Alert } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+
 import { supabase } from '../lib/supabase';
+import { colors } from '../theme/colours';
 
 export default function LoginScreen() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
+  const handleLogIn = async () => {
+    if (loading) return;
 
-    const handleLogIn = async () => {
-        if (!email.trim() || !password) {
-            Alert.alert('Missing fields', 'Please enter your email and password.');
-            return;
-        }
+    if (!email.trim() || !password) {
+      Alert.alert(
+        'Missing fields',
+        'Please enter your email and password.'
+      );
+      return;
+    }
 
-        const { data, error } = await supabase.auth.signInWithPassword({
-            email: email.trim(),
-            password: password,
-        });
+    setLoading(true);
 
-        if (error) {
-            Alert.alert('Login failed', error.message);
-            return;
-        }
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
 
-        console.log('Logged in user:', data.user?.id);
-        const { data: isMember, error: memberError } =
-            await supabase.rpc('is_business_member');
+      if (error) {
+        Alert.alert('Login failed', error.message);
+        return;
+      }
 
-        if (memberError) {
-            Alert.alert('Error', 'Could not verify your access.');
-            await supabase.auth.signOut();
-            return;
-        }
+      const {
+        data: isMember,
+        error: memberError,
+      } = await supabase.rpc('is_business_member');
 
-        if (!isMember) {
-            Alert.alert('Access denied', 'You are not authorised to use Arrange.');
-            await supabase.auth.signOut();
-            return;
-        }
+      if (memberError) {
+        Alert.alert(
+          'Error',
+          'Could not verify your access.'
+        );
+        await supabase.auth.signOut();
+        return;
+      }
 
-        console.log('Access granted!');
-    };
+      if (!isMember) {
+        Alert.alert(
+          'Access denied',
+          'You are not authorised to use Arrange.'
+        );
+        await supabase.auth.signOut();
+        return;
+      }
 
+      // App.tsx should detect the session change
+      // and navigate to the main app automatically.
+    } catch {
+      Alert.alert(
+        'Something went wrong',
+        'Please try signing in again.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    return (
-
-        <View style={styles.container}>
-            <Text style={styles.title}>Log In</Text>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-                style={styles.credInput}
-                placeholder='johndoe@email.com'
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
+  return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Branding */}
+        <View style={styles.branding}>
+          <View style={styles.logoContainer}>
+            <Ionicons
+              name="cube-outline"
+              size={34}
+              color={colors.primary}
             />
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-                style={styles.credInput}
-                placeholder='password'
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-            />
-            <Pressable style={styles.button}
-                onPress={handleLogIn}
+          </View>
 
-            >
-                <Text style={styles.buttonText}>Log In</Text>
-            </Pressable>
+          <Text style={styles.logoText}>
+            Arrange<Text style={styles.logoDot}>.</Text>
+          </Text>
+
+          <Text style={styles.tagline}>
+            Inventory, organised.
+          </Text>
         </View>
 
-    );
+        {/* Sign in form */}
+        <View style={styles.formHeader}>
+          <Text style={styles.title}>Welcome back</Text>
+          <Text style={styles.subtitle}>
+            Sign in to manage your inventory.
+          </Text>
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>EMAIL ADDRESS</Text>
+
+          <TextInput
+            style={styles.input}
+            placeholder="you@example.com"
+            placeholderTextColor={colors.textMuted}
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            autoComplete="email"
+            textContentType="username"
+            editable={!loading}
+            returnKeyType="next"
+          />
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>PASSWORD</Text>
+
+          <View style={styles.passwordContainer}>
+            <TextInput
+              style={styles.passwordInput}
+              placeholder="Enter your password"
+              placeholderTextColor={colors.textMuted}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="current-password"
+              textContentType="password"
+              editable={!loading}
+              returnKeyType="done"
+              onSubmitEditing={handleLogIn}
+            />
+
+            <Pressable
+              style={styles.eyeButton}
+              onPress={() => setShowPassword(!showPassword)}
+              accessibilityLabel={
+                showPassword ? 'Hide password' : 'Show password'
+              }
+            >
+              <Ionicons
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={21}
+                color={colors.textMuted}
+              />
+            </Pressable>
+          </View>
+        </View>
+
+        <Pressable
+          style={[
+            styles.loginButton,
+            loading && styles.disabledButton,
+          ]}
+          onPress={handleLogIn}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color={colors.background} />
+          ) : (
+            <>
+              <Text style={styles.loginButtonText}>
+                Sign In
+              </Text>
+              <Ionicons
+                name="arrow-forward"
+                size={19}
+                color={colors.background}
+              />
+            </>
+          )}
+        </Pressable>
+
+        <View style={styles.footer}>
+          <Ionicons
+            name="lock-closed-outline"
+            size={13}
+            color={colors.textMuted}
+          />
+
+          <Text style={styles.footerText}>
+            Secure access to your inventory
+          </Text>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#ffffff',
-        paddingHorizontal: 20,
-        paddingTop: 20,
-    },
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
 
-    title: {
-        fontSize: 24,
-        fontWeight: '600',
-    },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingTop: 70,
+    paddingBottom: 40,
+    justifyContent: 'center',
+  },
 
-    label: {
-        fontSize: 15
-    },
+  branding: {
+    alignItems: 'center',
+    marginBottom: 55,
+  },
 
-    credInput: {
-        height: 48,
-        borderWidth: 1,
-        borderColor: '#d1d1d1',
-        borderRadius: 8,
-        paddingHorizontal: 15,
-        marginTop: 20,
-        fontSize: 16,
-    },
+  logoContainer: {
+    width: 72,
+    height: 72,
+    borderRadius: 20,
+    backgroundColor: colors.primaryMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
 
-    button: {
-        backgroundColor: '#111111',
-        paddingVertical: 14,
-        borderRadius: 8,
-        alignItems: 'center',
-        marginTop: 24,
-    },
+  logoText: {
+    color: colors.text,
+    fontSize: 34,
+    fontWeight: '800',
+    letterSpacing: -1,
+  },
 
-    buttonText: {
-        color: '#ffffff',
-        fontSize: 16,
-        fontWeight: '600',
-    },
+  logoDot: {
+    color: colors.primary,
+  },
+
+  tagline: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    marginTop: 6,
+  },
+
+  formHeader: {
+    marginBottom: 30,
+  },
+
+  title: {
+    color: colors.text,
+    fontSize: 26,
+    fontWeight: '700',
+    marginBottom: 7,
+  },
+
+  subtitle: {
+    color: colors.textSecondary,
+    fontSize: 14,
+  },
+
+  field: {
+    marginBottom: 22,
+  },
+
+  label: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    marginBottom: 10,
+  },
+
+  input: {
+    height: 54,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 11,
+    paddingHorizontal: 16,
+    color: colors.text,
+    fontSize: 15,
+  },
+
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 11,
+  },
+
+  passwordInput: {
+    flex: 1,
+    height: 54,
+    paddingLeft: 16,
+    color: colors.text,
+    fontSize: 15,
+  },
+
+  eyeButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+  },
+
+  loginButton: {
+    height: 54,
+    backgroundColor: colors.primary,
+    borderRadius: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginTop: 10,
+  },
+
+  disabledButton: {
+    opacity: 0.6,
+  },
+
+  loginButtonText: {
+    color: colors.background,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    marginTop: 32,
+  },
+
+  footerText: {
+    color: colors.textMuted,
+    fontSize: 12,
+  },
 });
