@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import {
   StyleSheet,
@@ -6,10 +5,6 @@ import {
   View,
   Pressable,
   FlatList,
-  Modal,
-  TextInput,
-  Keyboard,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +16,7 @@ import type { RootStackParamList } from '../types/navigation';
 import type { Product, InventoryItem } from '../types/inventory';
 import { supabase } from '../lib/supabase';
 import { colors } from '../theme/colours';
+import { useSaleBasket } from '../context/SaleBasketContext';
 
 type ProductDetailsScreenProps = NativeStackScreenProps<
   RootStackParamList,
@@ -36,10 +32,8 @@ export default function ProductDetailsScreen({
   const [product, setProduct] = useState<Product | null>(null);
   const [productInventory, setProductInventory] = useState<InventoryItem[]>([]);
   const [expandedItemId, setExpandedItemId] = useState<number | null>(null);
-  const [sellingItemId, setSellingItemId] = useState<number | null>(null);
-  const [salePrice, setSalePrice] = useState('');
-  const [savingSale, setSavingSale] = useState(false);
   const [loading, setLoading] = useState(true);
+  const { addItem } = useSaleBasket();
 
   const fetchProduct = async () => {
     const { data, error } = await supabase
@@ -72,63 +66,6 @@ export default function ProductDetailsScreen({
     );
 
     setProductInventory(availableItems);
-  };
-
-  const handleConfirmSale = async () => {
-    if (sellingItemId === null || savingSale) return;
-
-    const price = Number(salePrice);
-
-    if (!salePrice.trim() || !Number.isFinite(price) || price < 0) {
-      Alert.alert(
-        'Invalid price',
-        'Please enter a valid selling price.'
-      );
-      return;
-    }
-
-    setSavingSale(true);
-
-    const today = new Date();
-    const soldDate = [
-      today.getFullYear(),
-      String(today.getMonth() + 1).padStart(2, '0'),
-      String(today.getDate()).padStart(2, '0'),
-    ].join('-');
-
-    const { error } = await supabase
-      .from('sales')
-      .insert({
-        inventory_item_id: sellingItemId,
-        sale_price: price,
-        sold_date: soldDate,
-      });
-
-    setSavingSale(false);
-
-    if (error) {
-      Alert.alert('Sale failed', error.message);
-      return;
-    }
-
-    setSellingItemId(null);
-    setSalePrice('');
-    setExpandedItemId(null);
-
-    await fetchInventory();
-
-    Alert.alert(
-      'Success',
-      'Sale recorded successfully!'
-    );
-  };
-
-  const closeSaleModal = () => {
-    if (savingSale) return;
-
-    setSellingItemId(null);
-    setSalePrice('');
-    Keyboard.dismiss();
   };
 
   useFocusEffect(
@@ -208,7 +145,18 @@ export default function ProductDetailsScreen({
                   : item.id
               );
             }}
-            onSell={() => setSellingItemId(item.id)}
+            onSell={() => {
+              if (!product) return;
+
+              addItem({
+                inventoryItemId: item.id,
+                brand: product.brand,
+                name: product.name,
+                size: item.size,
+                salePrice: item.asking_price ?? 0,
+                cost: item.cost,
+              });
+            }}
           />
         )}
         ListEmptyComponent={
@@ -235,79 +183,6 @@ export default function ProductDetailsScreen({
           )
         }
       />
-
-      {/* Sell item modal */}
-      <Modal
-        visible={sellingItemId !== null}
-        transparent
-        animationType="slide"
-        onRequestClose={closeSaleModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                Sell Item
-              </Text>
-
-              <Pressable
-                onPress={closeSaleModal}
-                disabled={savingSale}
-                accessibilityLabel="Close sale modal"
-              >
-                <Ionicons
-                  name="close"
-                  size={24}
-                  color={colors.textSecondary}
-                />
-              </Pressable>
-            </View>
-
-            <Text style={styles.inputLabel}>
-              SALE PRICE (£)
-            </Text>
-
-            <TextInput
-              style={styles.saleInput}
-              placeholder="0.00"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="decimal-pad"
-              value={salePrice}
-              onChangeText={setSalePrice}
-              editable={!savingSale}
-            />
-
-            <Pressable
-              style={[
-                styles.confirmButton,
-                savingSale && styles.disabledButton,
-              ]}
-              onPress={handleConfirmSale}
-              disabled={savingSale}
-            >
-              {savingSale ? (
-                <ActivityIndicator
-                  color={colors.background}
-                />
-              ) : (
-                <Text style={styles.confirmButtonText}>
-                  Confirm Sale
-                </Text>
-              )}
-            </Pressable>
-
-            <Pressable
-              style={styles.cancelButton}
-              onPress={closeSaleModal}
-              disabled={savingSale}
-            >
-              <Text style={styles.cancelText}>
-                Cancel
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
 
       {/* Floating add inventory button */}
       <Pressable
@@ -439,80 +314,4 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
 
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
-
-  modalContent: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 18,
-    padding: 22,
-  },
-
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 24,
-  },
-
-  modalTitle: {
-    color: colors.text,
-    fontSize: 22,
-    fontWeight: '700',
-  },
-
-  inputLabel: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-  },
-
-  saleInput: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    padding: 14,
-    marginTop: 10,
-    marginBottom: 20,
-    color: colors.text,
-    fontSize: 18,
-  },
-
-  confirmButton: {
-    backgroundColor: colors.primary,
-    padding: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 50,
-  },
-
-  disabledButton: {
-    opacity: 0.6,
-  },
-
-  confirmButtonText: {
-    color: colors.background,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-
-  cancelButton: {
-    padding: 14,
-    alignItems: 'center',
-  },
-
-  cancelText: {
-    color: colors.textSecondary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
 });

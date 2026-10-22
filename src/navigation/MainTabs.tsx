@@ -12,6 +12,15 @@ import type {
   MainTabParamList,
 } from '../types/navigation';
 
+import {
+  BottomTabBar,
+  type BottomTabBarProps,
+} from '@react-navigation/bottom-tabs';
+
+import SaleBasketBar from '../components/SaleBasketBar';
+import { useState } from 'react';
+import SaleBasketSheet from '../components/SaleBasketSheet';
+
 import StockScreen from '../screens/StockScreen';
 import ProductDetailsScreen from '../screens/ProductDetailsScreen';
 import AddProductScreen from '../screens/AddProductScreen';
@@ -19,6 +28,7 @@ import AddInventoryItemScreen from '../screens/AddInventoryItemScreen';
 import SalesScreen from '../screens/SalesScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import AnalyticsScreen from '../screens/AnalyticsScreen';
+
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const StockStack = createNativeStackNavigator<RootStackParamList>();
@@ -78,6 +88,27 @@ function PlaceholderScreen({ title }: { title: string }) {
 }
 
 
+function ArrangeTabBar(props: BottomTabBarProps) {
+  const [basketOpen, setBasketOpen] = useState(false);
+
+  return (
+    <View>
+      <SaleBasketBar
+        onPress={() => setBasketOpen(true)}
+      />
+
+      <BottomTabBar {...props} />
+
+      <SaleBasketSheet
+        visible={basketOpen}
+        onClose={() => setBasketOpen(false)}
+      />
+    </View>
+  );
+}
+
+
+
 
 
 export default function MainTabs() {
@@ -85,6 +116,7 @@ export default function MainTabs() {
 
   return (
     <Tab.Navigator
+      tabBar={(props) => <ArrangeTabBar {...props} />}
       screenOptions={({ route }) => ({
         headerShown: false,
 

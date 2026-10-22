@@ -125,7 +125,7 @@ export default function InventoryItemRow({
                 color={colors.background}
               />
               <Text style={styles.sellButtonText}>
-                Mark as Sold
+                Add to Sale
               </Text>
             </Pressable>
           </View>

@@ -8,6 +8,7 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from './src/lib/supabase';
 import LoginScreen from './src/screens/LoginScreen';
 import MainTabs from './src/navigation/MainTabs';
+import { SaleBasketProvider } from './src/context/SaleBasketContext';
 
 
 
@@ -113,15 +114,20 @@ export default function App() {
     );
   }
 
+
   return (
     <NavigationContainer theme={navigationTheme}>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {session && isAuthorised ? (
-          <Stack.Screen name="Main" component={MainTabs} />
-        ) : (
+      {session && isAuthorised ? (
+        <SaleBasketProvider>
+          <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="Main" component={MainTabs} />
+          </Stack.Navigator>
+        </SaleBasketProvider>
+      ) : (
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Login" component={LoginScreen} />
-        )}
-      </Stack.Navigator>
+        </Stack.Navigator>
+      )}
 
       <StatusBar style="light" />
     </NavigationContainer>
