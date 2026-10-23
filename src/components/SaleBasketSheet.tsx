@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Modal,
   View,
@@ -7,13 +7,21 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  TextInput,
+  Alert,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Crypto from 'expo-crypto';
 
 import { useSaleBasket } from '../context/SaleBasketContext';
 import { colors } from '../theme/colours';
 import SalePriceInput from './SalePriceInput';
+
+import {
+  savePendingCheckout,
+  clearPendingCheckout,
+} from '../services/checkoutStorage';
+
+import { checkoutSale } from '../services/saleTransactions';
 
 type Props = {
   visible: boolean;
@@ -24,7 +32,23 @@ export default function SaleBasketSheet({
   visible,
   onClose,
 }: Props) {
-  const { items, removeItem, updatePrice } = useSaleBasket();
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
+
+  const checkoutAttempt = useRef<{
+    key: string;
+    basketSignature: string;
+  } | null>(null);
+
+  const {
+    items,
+    removeItem,
+    updatePrice,
+    finishSuccessfulCheckout,
+    pendingCheckout,
+    setPendingCheckout,
+    checkoutRecoveryLoading,
+    checkoutRecoveryError,
+  } = useSaleBasket();
 
   const total = items.reduce(
     (sum, item) => sum + item.salePrice,
@@ -35,6 +59,154 @@ export default function SaleBasketSheet({
     (sum, item) => sum + item.cost,
     0
   );
+
+  const handleCheckout = async () => {
+    if (isCheckingOut || checkoutRecoveryLoading) return;
+
+    if (checkoutRecoveryError) {
+      Alert.alert(
+        'Checkout unavailable',
+        checkoutRecoveryError
+      );
+      return;
+    }
+
+    if (pendingCheckout) {
+      Alert.alert(
+        'Pending checkout',
+        'A previous checkout needs to be resolved before starting another sale.'
+      );
+      return;
+    }
+
+    if (items.length === 0) return;
+
+    const checkoutItems = items.map((item) => ({
+      inventoryItemId: item.inventoryItemId,
+      salePrice: item.salePrice,
+    }));
+
+    const basketSignature = JSON.stringify(
+      [...checkoutItems].sort(
+        (a, b) => a.inventoryItemId - b.inventoryItemId
+      )
+    );
+
+    if (
+      checkoutAttempt.current &&
+      checkoutAttempt.current.basketSignature !== basketSignature
+    ) {
+      Alert.alert(
+        'Checkout needs checking',
+        'The basket has changed since the previous checkout attempt. Check Sales History before starting another sale.'
+      );
+      return;
+    }
+
+    if (!checkoutAttempt.current) {
+      checkoutAttempt.current = {
+        key: Crypto.randomUUID(),
+        basketSignature,
+      };
+    }
+
+    const checkout = {
+      key: checkoutAttempt.current.key,
+      items: checkoutItems,
+    };
+
+    setIsCheckingOut(true);
+
+    try {
+      // Save the exact attempt before sending it to Supabase.
+      await savePendingCheckout(checkout);
+
+      // Lock basket editing while the outcome is unresolved.
+      setPendingCheckout(checkout);
+
+
+      const transactionId = await checkoutSale(
+        checkout.key,
+        checkout.items
+      );
+
+
+
+      // Keep the pending checkout recoverable until basket cleanup succeeds.
+      await finishSuccessfulCheckout();
+      await clearPendingCheckout();
+      setPendingCheckout(null);
+      checkoutAttempt.current = null;
+
+      Alert.alert(
+        'Sale completed',
+        `Transaction #${transactionId} was recorded successfully.`
+      );
+
+      onClose();
+    } catch (error) {
+      Alert.alert(
+        'Checkout needs attention',
+        error instanceof Error
+          ? error.message
+          : 'Unable to confirm checkout. Check Sales History.'
+      );
+    } finally {
+      setIsCheckingOut(false);
+    }
+  };
+
+  const handleResumeCheckout = async () => {
+    if (
+      isCheckingOut ||
+      checkoutRecoveryLoading ||
+      checkoutRecoveryError ||
+      !pendingCheckout
+    ) {
+      return;
+    }
+
+    setIsCheckingOut(true);
+
+    try {
+      // Retry the exact original checkout.
+      const transactionId = await checkoutSale(
+        pendingCheckout.key,
+        pendingCheckout.items
+      );
+
+
+
+      // Keep the original checkout key until all local cleanup succeeds.
+      await finishSuccessfulCheckout();
+      await clearPendingCheckout();
+      setPendingCheckout(null);
+      checkoutAttempt.current = null;
+
+      Alert.alert(
+        'Sale completed',
+        `Transaction #${transactionId} was confirmed successfully.`
+      );
+
+      onClose();
+    } catch (error) {
+      Alert.alert(
+        'Checkout still unresolved',
+        error instanceof Error
+          ? error.message
+          : 'Unable to confirm the sale. Please try again.'
+      );
+    } finally {
+      setIsCheckingOut(false);
+    }
+  };
+
+  const checkoutDisabled =
+    isCheckingOut ||
+    checkoutRecoveryLoading ||
+    checkoutRecoveryError !== null ||
+    pendingCheckout !== null ||
+    items.length === 0;
 
   return (
     <Modal
@@ -83,7 +255,9 @@ export default function SaleBasketSheet({
                   </Text>
 
                   <View style={styles.priceContainer}>
-                    <Text style={styles.priceLabel}>Selling price (£)</Text>
+                    <Text style={styles.priceLabel}>
+                      Selling price (£)
+                    </Text>
 
                     <SalePriceInput
                       price={item.salePrice}
@@ -147,15 +321,47 @@ export default function SaleBasketSheet({
               </Text>
             </View>
 
+            {pendingCheckout !== null && (
+              <View style={styles.recoveryContainer}>
+                <Text style={styles.recoveryTitle}>
+                  Previous checkout needs attention
+                </Text>
+
+                <Text style={styles.recoveryDescription}>
+                  A previous sale may have been completed.
+                  Resume it to confirm the result without
+                  recording a duplicate transaction.
+                </Text>
+
+                <Pressable
+                  style={[
+                    styles.completeButton,
+                    isCheckingOut && styles.disabledButton,
+                  ]}
+                  onPress={handleResumeCheckout}
+                  disabled={isCheckingOut}
+                >
+                  <Text style={styles.completeButtonText}>
+                    {isCheckingOut
+                      ? 'Checking previous sale...'
+                      : 'Resume Checkout'}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+
             <Pressable
-              style={styles.completeButton}
-              onPress={() => {
-                // Transaction completion comes later.
-                console.log('Complete sale pressed');
-              }}
+              style={[
+                styles.completeButton,
+                checkoutDisabled && styles.disabledButton,
+              ]}
+              onPress={handleCheckout}
+              disabled={checkoutDisabled}
             >
               <Text style={styles.completeButtonText}>
-                Complete Sale
+                {isCheckingOut
+                  ? 'Completing sale...'
+                  : 'Complete Sale'}
               </Text>
             </Pressable>
           </View>
@@ -223,11 +429,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 4,
   },
-  itemPrice: {
-    color: colors.primary,
-    fontSize: 16,
-    fontWeight: '700',
-    marginTop: 8,
+  priceContainer: {
+    marginTop: 12,
+    gap: 6,
+  },
+  priceLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
   },
   summary: {
     padding: 20,
@@ -255,32 +463,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
   },
+  disabledButton: {
+    opacity: 0.5,
+  },
   completeButtonText: {
     color: '#10151D',
     fontSize: 16,
     fontWeight: '700',
   },
 
-  priceContainer: {
-    marginTop: 12,
-    gap: 6,
-  },
 
-  priceLabel: {
-    color: colors.textMuted,
-    fontSize: 12,
-  },
-
-  priceInput: {
-    backgroundColor: colors.surface,
+  recoveryContainer: {
+    padding: 14,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 8,
+  },
+
+  recoveryTitle: {
     color: colors.text,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-    minWidth: 110,
+  },
+
+  recoveryDescription: {
+    color: colors.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
   },
 });

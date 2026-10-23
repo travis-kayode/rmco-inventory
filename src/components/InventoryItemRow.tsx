@@ -17,6 +17,7 @@ type InventoryItemRowProps = {
   onPress: () => void;
   date_added: string;
   onSell: () => void;
+  alreadyAdded: boolean;
 };
 
 export default function InventoryItemRow({
@@ -28,6 +29,7 @@ export default function InventoryItemRow({
   onPress,
   date_added,
   onSell,
+  alreadyAdded,
 }: InventoryItemRowProps) {
   const isDeadstock = condition === 'DS';
 
@@ -115,17 +117,31 @@ export default function InventoryItemRow({
             </Pressable>
 
             <Pressable
-              style={styles.sellButton}
+              style={[
+                styles.sellButton,
+                alreadyAdded && styles.alreadyAddedButton,
+              ]}
               onPress={onSell}
-              accessibilityLabel="Sell item"
+              disabled={alreadyAdded}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: alreadyAdded }}
+              accessibilityLabel={
+                alreadyAdded ? 'Already added to sale' : 'Add to sale'
+              }
             >
               <Ionicons
-                name="cash-outline"
+                name={alreadyAdded ? 'checkmark-circle-outline' : 'cash-outline'}
                 size={17}
-                color={colors.background}
+                color={alreadyAdded ? colors.textMuted : colors.background}
               />
-              <Text style={styles.sellButtonText}>
-                Add to Sale
+
+              <Text
+                style={[
+                  styles.sellButtonText,
+                  alreadyAdded && styles.alreadyAddedText,
+                ]}
+              >
+                {alreadyAdded ? 'Already Added' : 'Add to Sale'}
               </Text>
             </Pressable>
           </View>
@@ -271,5 +287,13 @@ const styles = StyleSheet.create({
     color: colors.background,
     fontSize: 13,
     fontWeight: '700',
+  },
+  alreadyAddedButton: {
+    backgroundColor: colors.border,
+    opacity: 0.7,
+  },
+
+  alreadyAddedText: {
+    color: colors.textMuted,
   },
 });

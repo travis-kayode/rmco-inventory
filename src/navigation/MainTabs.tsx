@@ -28,7 +28,7 @@ import AddInventoryItemScreen from '../screens/AddInventoryItemScreen';
 import SalesScreen from '../screens/SalesScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import AnalyticsScreen from '../screens/AnalyticsScreen';
-
+import { useSaleBasket } from '../context/SaleBasketContext';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const StockStack = createNativeStackNavigator<RootStackParamList>();
@@ -91,11 +91,36 @@ function PlaceholderScreen({ title }: { title: string }) {
 function ArrangeTabBar(props: BottomTabBarProps) {
   const [basketOpen, setBasketOpen] = useState(false);
 
+  const {
+    items,
+    pendingCheckout,
+    checkoutRecoveryError,
+  } = useSaleBasket();
+
+  const needsRecovery =
+    pendingCheckout !== null ||
+    checkoutRecoveryError !== null;
+
   return (
     <View>
-      <SaleBasketBar
-        onPress={() => setBasketOpen(true)}
-      />
+      {needsRecovery ? (
+        <View style={styles.recoveryBar}>
+          <Text style={styles.recoveryBarText}>
+            Checkout needs attention
+          </Text>
+
+          <Text
+            style={styles.recoveryBarAction}
+            onPress={() => setBasketOpen(true)}
+          >
+            Open basket →
+          </Text>
+        </View>
+      ) : (
+        <SaleBasketBar
+          onPress={() => setBasketOpen(true)}
+        />
+      )}
 
       <BottomTabBar {...props} />
 
@@ -240,4 +265,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 8,
   },
+
+  recoveryBar: {
+  backgroundColor: colors.surface,
+  borderTopWidth: 1,
+  borderTopColor: colors.border,
+  paddingHorizontal: 20,
+  paddingVertical: 14,
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+},
+
+recoveryBarText: {
+  color: colors.text,
+  fontSize: 14,
+  fontWeight: '600',
+},
+
+recoveryBarAction: {
+  color: colors.primary,
+  fontSize: 14,
+  fontWeight: '700',
+},
 });

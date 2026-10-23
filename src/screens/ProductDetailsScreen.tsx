@@ -33,7 +33,7 @@ export default function ProductDetailsScreen({
   const [productInventory, setProductInventory] = useState<InventoryItem[]>([]);
   const [expandedItemId, setExpandedItemId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const { addItem } = useSaleBasket();
+  const { addItem, items } = useSaleBasket();
 
   const fetchProduct = async () => {
     const { data, error } = await supabase
@@ -49,11 +49,10 @@ export default function ProductDetailsScreen({
 
     setProduct(data);
   };
-
   const fetchInventory = async () => {
     const { data, error } = await supabase
       .from('inventory_items')
-      .select('*, sales(id)')
+      .select('*, sales(id), sale_items(id)')
       .eq('product_id', productId);
 
     if (error) {
@@ -62,12 +61,15 @@ export default function ProductDetailsScreen({
     }
 
     const availableItems = (data ?? []).filter(
-      (item) => item.sales === null
+      (item) =>
+        (item.sales === null ||
+          (Array.isArray(item.sales) && item.sales.length === 0)) &&
+        (item.sale_items === null ||
+          (Array.isArray(item.sale_items) && item.sale_items.length === 0))
     );
 
     setProductInventory(availableItems);
   };
-
   useFocusEffect(
     useCallback(() => {
       let active = true;
@@ -137,6 +139,9 @@ export default function ProductDetailsScreen({
             location={item.location}
             cost={item.cost}
             date_added={item.date_added}
+            alreadyAdded={items.some(
+              (basketItem) => basketItem.inventoryItemId === item.id
+            )}
             expanded={expandedItemId === item.id}
             onPress={() => {
               setExpandedItemId(
